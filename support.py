@@ -82,9 +82,8 @@ def prep_input_data(x_paths, y_paths, train_size=0.8, seed=None, tilesize=256, c
             x = exposure.equalize_adapthist(x, clip_limit=clahe_clip_limit)
         y = io.imread(y_paths[i]) > 0
         ##Setup model
-        tile_shape = np.array(x.shape) // tilesize
-        y_aug = tile_and_augment(y, num_translations=0, rotations=8, exposure_adjust=0.15)
-        x_aug = tile_and_augment(x, num_translations=0, rotations=8, exposure_adjust=0.15)
+        y_aug, _ = tile_and_augment(y, num_translations=2, rotations=8, exposure_adjust=0.15)
+        x_aug, tile_shape = tile_and_augment(x, num_translations=2, rotations=8, exposure_adjust=0.15)
         y_stack.append(y_aug)
         x_stack.append(x_aug)
 
@@ -124,6 +123,13 @@ def prep_input_data(x_paths, y_paths, train_size=0.8, seed=None, tilesize=256, c
 
 
 def tune_theta(y_p, y_test, name=""):
+    """Tune the threshold for the model.
+    Args:
+        y_p: the predicted masks
+        y_test: the test masks
+        name: the name of the model
+    Returns:
+        best_theta: the best threshold for the model"""
     thetas = np.arange(0.05, 1.0, 0.05)
     y_p_broadcast = np.broadcast_to(y_p[:, :, :, 0], (len(thetas),) + y_p.shape[:-1])
     y_p_all_threshold = (y_p_broadcast > thetas[:, None, None, None]).astype(np.float32)
@@ -158,7 +164,17 @@ def tune_theta(y_p, y_test, name=""):
 
 def test(model, y_test, x_test, tile_shape, name="model", batch_size=1, tilesize=256):
     """Test a model on the test data.
-    Will do theta tuning and will save the results to a file."""
+    Will do theta tuning and will save the results to a file.
+    Args:
+        model: the model to test
+        y_test: the test masks
+        x_test: the test data
+        tile_shape: the shape of the tiles
+        name: the name of the model
+        batch_size: the batch size to use
+        tilesize: the size of the tiles
+    Returns:
+        None"""
     # Run on test data
     y_p = model.predict(x_test, verbose=0, batch_size=batch_size)
     # Get best threshold (coarse)
@@ -169,11 +185,14 @@ def test(model, y_test, x_test, tile_shape, name="model", batch_size=1, tilesize
     y_pred = np.where(y_p > best_theta, 1, 0).astype(np.float32)
     y_pred_1d = y_pred.reshape(-1)
     y_test_1d = y_test.reshape(-1)
-    y_pred_combined = combine_tiles(y_pred[:, :, :, 0], tile_shape)
-    y_test_combined = combine_tiles(y_test[:, :, :, 0], tile_shape)
-    x_test_combined = combine_tiles(x_test[:, :, :, 0], tile_shape)
+    y_pred_combined = untile(y_pred[:np.prod(tile_shape), :, :, 0], tile_shape)
+    y_test_combined = untile(y_test[:np.prod(tile_shape), :, :, 0], tile_shape)
+    x_test_combined = untile(x_test[:np.prod(tile_shape), :, :, 0], tile_shape)
 
-    compare_n_ims([y_test_combined, y_pred_combined, x_test_combined], ['Ground truth', 'Predicted', "Data"], show=False, grid=tilesize)
+    compare_n_ims([y_test_combined, y_pred_combined, x_test_combined],
+                  ['Ground truth', 'Predicted', "Data"],
+                  show=False,
+                  grid_line_spacing=None)
     plt.savefig(f'./{name}_Test-Results.png', dpi=300)
     recall = pm.Recall(y_test_1d, y_pred_1d)
     precision = pm.Precision(y_test_1d, y_pred_1d)
@@ -190,8 +209,15 @@ def test(model, y_test, x_test, tile_shape, name="model", batch_size=1, tilesize
         f.write(line)
 
 
-def compare_n_ims(im, titles=None, show=False, grid=None):
-    # Compare BSE, Alumina, Output
+def compare_n_ims(im, titles=None, show=False, grid_line_spacing=None):
+    """Function for comparing n images side by side.
+    Args:
+        im: list of images to compare
+        titles: list of titles for the images
+        show: boolean of whether to show the images
+        grid: int of the grid size to use for the images
+    Returns:
+        None"""
     fig = plt.figure(4, figsize=(21,7))
     axes = []
     for i in range(len(im)):
@@ -200,17 +226,16 @@ def compare_n_ims(im, titles=None, show=False, grid=None):
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title(titles[i])
-        if grid is not None:
-            ax.xaxis.set_major_locator(MultipleLocator(grid))
-            ax.yaxis.set_major_locator(MultipleLocator(grid))
-            ax.grid(which="major", axis="both", linestyle="-", color="#CCCCCC")
         axes.append(ax)
+        if grid_line_spacing is not None:
+            ax.xaxis.set_major_locator(MultipleLocator(grid_line_spacing))
+            ax.yaxis.set_major_locator(MultipleLocator(grid_line_spacing))
     plt.tight_layout()
     if show:
         plt.show()
 
 
-def tileslice(imginput, tiles, offset=(0,0)):
+def tileslice(img, tilesize, offset=(0,0)):
     """Function for tiling an image into 256x256 tiles.
     Args:
         imginput: np.array of shape (H,W)
@@ -218,31 +243,27 @@ def tileslice(imginput, tiles, offset=(0,0)):
         offset: np.array of length 2, containing x and y offset of image from top left corner of image
     Returns:
         np.array of shape (tiles[0]*tiles[1],256,256)"""
-    img_stack = []
-    for i in range(tiles[0]):
-        for j in range(tiles[1]):
-            old = (slice(i*256 + offset[0], 256*(i+1) + offset[0]), slice(256*j + offset[1], 256*(j+1) + offset[1]))
-            img_stack.append(imginput[old])
-    return np.array(img_stack)
+    tile_shape = np.array(img.shape) // tilesize
+    s = (slice(offset[0], offset[0] + tile_shape[0] * tilesize),
+         slice(offset[1], offset[1] + tile_shape[1] * tilesize))
+    out = img[s]
+    out = np.array(np.split(out, tile_shape[1], axis=-1))
+    out = np.array(np.split(out, tile_shape[0], axis=-2))
+    out = np.reshape(out, (tile_shape[0] * tile_shape[1], tilesize, tilesize))
+    return out, tile_shape
 
-def join_tiles(tiles,tilesize,sliceimgnp):
-    ##underway
-    ind = np.reshape(np.array(range(sliceimgnp.shape[0])),(tiles[0],tiles[1]))
-    img = np.zeros((tiles[0]*tilesize,tiles[1]*tilesize))
-    for i in range(tiles[0]):
-        for j in range(tiles[1]):
-            img[i*tilesize:(i+1)*tilesize,j*tilesize:(j+1)*tilesize] = np.squeeze(sliceimgnp[ind[i,j],:,:])
-    return img
 
-def loss_def(results):
-    plt.figure(figsize=(8, 8))
-    plt.title("Learning curve")
-    plt.plot(results.history["loss"], label="loss")
-    plt.plot(results.history["val_loss"], label="val_loss")
-    plt.plot(np.argmin(results.history["val_loss"]), np.min(results.history["val_loss"]), marker="x", color="r", label="best model")
-    plt.xlabel("Epochs")
-    plt.ylabel("log_loss")
-    plt.legend()
+def untile(imgs, tile_shape):
+    """Function for untiling an image from 256x256 tiles.
+    Args:
+        img: np.array of shape (tiles[0]*tiles[1],tilesize,tilesize)
+        tile_shape: np.array of length 2, containing row direction number of tiles and column dir number of tiles
+    Returns:
+        np.array of shape (tiles[0]*tilesize,tiles[1]*tilesize)"""
+    imgs = np.reshape(imgs, (tile_shape[0], tile_shape[1], imgs.shape[1], imgs.shape[2]))
+    imgs = np.concatenate(imgs, axis=-2)
+    imgs = np.concatenate(imgs, axis=-1)
+    return imgs
 
 
 def tile_and_augment(image, tile_size=256, num_translations=0, rotations=1, exposure_adjust=None, offset=[0, 0]):
@@ -256,12 +277,11 @@ def tile_and_augment(image, tile_size=256, num_translations=0, rotations=1, expo
         exposure_adjust: boolean of whether to adjust the exposure of the image
     Returns:
         augmented_stack: array of the augmented image data"""
-    num_tiles = np.array(image.shape) // tile_size
     # Create a list of tiles from the image data, performing translation augmentation as well
     if num_translations > 0:
-        aug_stack = augment_translation(image, tile_size=tile_size, num_translations=num_translations) # Gives (xtiles * ytiles * N_trans**2, 256, 256)
+        aug_stack, tile_shape = augment_translation(image, tile_size=tile_size, num_translations=num_translations) # Gives (xtiles * ytiles * N_trans**2, 256, 256)
     else:
-        aug_stack = tileslice(image, num_tiles, offset) # will give (xtiles * ytiles, 256, 256)
+        aug_stack, tile_shape = tileslice(image, tile_size, offset) # will give (xtiles * ytiles, 256, 256)
     # Perform mirroring and rotation augmentation on the translated tiles
     if rotations > 1:
         aug_stack = augment_rot_mirror(aug_stack, rotations=rotations)
@@ -269,7 +289,7 @@ def tile_and_augment(image, tile_size=256, num_translations=0, rotations=1, expo
     if exposure_adjust is not None:
         aug_stack =  augment_exposure(aug_stack, num_adjustments=2, adjustment_size=exposure_adjust)
     # print("   -> Created {} tiles that were augmented to produce {} tiles.".format(np.prod(num_tiles), aug_stack.shape[0]))
-    return np.array(aug_stack)
+    return np.array(aug_stack), tile_shape
 
 
 def augment_translation(image, tile_size=256, num_translations=3):
@@ -282,23 +302,29 @@ def augment_translation(image, tile_size=256, num_translations=3):
         translated_images: An array of the translated images. shape (num_tran^2 * num_tiles_in_x * num_tiles_in_y, tile_size, tile_size)
                            ex./ 256x256 tiles for 1900x1700 image with 3 translations per axis will return an array of shape (9*7*6=378, 256, 256)"""
     # Get number of tiles and the excess based on the image and tile size
-    tiles = np.array(image.shape) // tile_size
     excess = np.array(image.shape) % tile_size
-    # Correct number of translations to contain both dimensions
-    if type(num_translations) == int:
-        num_translations = [num_translations, num_translations]
-    # Create the offset chains
-    offsetchain1 = np.linspace(0, excess[0] - 1, num_translations[0], dtype=int)
-    offsetchain2 = np.linspace(0, excess[1] - 1, num_translations[1], dtype=int)
+    if excess[0] == 0:
+        offset_chain1 = np.array([0])
+    else:
+        offset_chain1 = np.linspace(0, excess[0] - 1, num_translations, dtype=int)
+    if excess[1] == 0:
+        offset_chain2 = np.array([0])
+    else:
+        offset_chain2 = np.linspace(0, excess[1] - 1, num_translations, dtype=int)
+    # Check for edge cases
+    if len(offset_chain1) == 1 and len(offset_chain2) == 1:
+        print("\tImage is too small to augment translations. Excess: {}".format(excess))
+        return tileslice(image, tile_size)
     # Create the augmented images
-    augmented_images = np.zeros((np.prod(tiles) * np.prod(num_translations), tile_size, tile_size), dtype=image.dtype)
+    augmented_images = []
     count = 0
-    for i in offsetchain1:
-        for j in offsetchain2:
-            output = np.array(tileslice(image, tiles, [i, j]))
-            augmented_images[count: count + output.shape[0]] = output
+    for i in offset_chain1:
+        for j in offset_chain2:
+            output, tile_shape = tileslice(image, tile_size, (i, j))
+            augmented_images.extend(output)
             count += output.shape[0]
-    return augmented_images
+    augmented_images = np.array(augmented_images)
+    return augmented_images, tile_shape
 
 
 def augment_rot_mirror(images, rotations):

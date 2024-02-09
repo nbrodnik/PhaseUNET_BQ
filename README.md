@@ -27,6 +27,6 @@ Description of scripts
 - `performance_metrics.py`  Holds various performance metrics to evaluate the model.
 - `support_functions.py`  Support functions for running the model.
 - `loss_functions.py`  Loss functinos that can be used during training.
-- `model_runner.py`  Deprecated, moving functions in here to `support.py`.
+- `view_training_loss.py`  Function to plot the training loss.
 
 

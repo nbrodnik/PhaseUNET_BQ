@@ -11,7 +11,6 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 import tensorflow as tf
 from keras.models import load_model
 
-import model_runner as mr
 import support as supp
 from model import keras_basic_unet
 import loss_functions as lf
@@ -42,7 +41,7 @@ tilesize = 256
 # Define if uising grayscale images directly (=1) or stacking them to be rgb (=3)
 inputdepth = 1
 # training epochs for model
-epochs = 5
+epochs = 2
 # Number of batches to run
 batch_size = 16
 
