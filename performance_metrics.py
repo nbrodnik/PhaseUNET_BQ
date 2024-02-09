@@ -28,7 +28,7 @@ def F1(y_true, y_pred, smooth=1e-6):
     return 2*((precision*recall)/(precision+recall+smooth))
 
 
-def Jaccard_coef(y_true, y_pred, smooth=1):
+def IoU(y_true, y_pred, smooth=1):
     # Also called IoU
     y_true = y_true.reshape(-1)
     y_pred = y_pred.reshape(-1)
@@ -37,7 +37,8 @@ def Jaccard_coef(y_true, y_pred, smooth=1):
     jac = (intersecion + smooth) / (union + smooth)
     return jac
 
-def Jaccard_coef_Keras(y_true, y_pred, smooth=1):
+
+def IoU_Keras(y_true, y_pred, smooth=1):
     y_true = K.flatten(y_true)
     y_pred = K.flatten(y_pred)
     intersection = K.sum(y_true * y_pred)

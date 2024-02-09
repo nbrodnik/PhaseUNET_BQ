@@ -128,19 +128,19 @@ def test(model, y_test, x_test, tile_shape, name="model", batch_size=1, tilesize
     thetas = np.arange(0.05, 1.0, 0.05)
     y_p_broadcast = np.broadcast_to(y_p[:, :, :, 0], (len(thetas),) + y_p.shape[:-1])
     y_p_all_threshold = (y_p_broadcast > thetas[:, None, None, None]).astype(np.float32)
-    ious = np.array([pm.Jaccard_coef(y_test, y_p_all_threshold[i][:, :, :, None]) for i in tqdm(range(len(thetas)), desc="IoU (coarse)")])
+    ious = np.array([pm.IoU_coef(y_test, y_p_all_threshold[i][:, :, :, None]) for i in tqdm(range(len(thetas)), desc="IoU (coarse)")])
     best_theta = thetas[np.argmax(ious)]
     # Get best threshold (fine)
     thetas2 = np.arange(max(0.001, best_theta - 0.05), min(1.0, best_theta + 0.05), 0.01)
     y_p_broadcast = np.broadcast_to(y_p[:, :, :, 0], (len(thetas2),) + y_p.shape[:-1])
     y_p_all_threshold = (y_p_broadcast > thetas2[:, None, None, None]).astype(np.float32)
-    ious2 = np.array([pm.Jaccard_coef(y_test, y_p_all_threshold[i][:, :, :, None]) for i in tqdm(range(len(thetas2)), desc="IoU (fine)")])
+    ious2 = np.array([pm.IoU_coef(y_test, y_p_all_threshold[i][:, :, :, None]) for i in tqdm(range(len(thetas2)), desc="IoU (fine)")])
     best_theta = thetas2[np.argmax(ious2)]
     # Get best threshold (finer)
     thetas3 = np.arange(max(0.0001, best_theta - 0.005), min(1.0, best_theta + 0.005), 0.001)
     y_p_broadcast = np.broadcast_to(y_p[:, :, :, 0], (len(thetas3),) + y_p.shape[:-1])
     y_p_all_threshold = (y_p_broadcast > thetas3[:, None, None, None]).astype(np.float32)
-    ious3 = np.array([pm.Jaccard_coef(y_test, y_p_all_threshold[i][:, :, :, None]) for i in tqdm(range(len(thetas3)), desc="IoU (finer)")])
+    ious3 = np.array([pm.IoU_coef(y_test, y_p_all_threshold[i][:, :, :, None]) for i in tqdm(range(len(thetas3)), desc="IoU (finer)")])
     best_theta = thetas3[np.argmax(ious3)]
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 7))
@@ -168,5 +168,5 @@ def test(model, y_test, x_test, tile_shape, name="model", batch_size=1, tilesize
     recall = pm.Recall(y_test_1d, y_pred_1d)
     precision = pm.Precision(y_test_1d, y_pred_1d)
     f1 = pm.F1(y_test_1d, y_pred_1d)
-    iou = pm.Jaccard_coef(y_test, y_pred)
+    iou = pm.IoU_coef(y_test, y_pred)
     return (recall, precision, f1, iou, best_theta)
