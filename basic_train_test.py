@@ -11,7 +11,7 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 import tensorflow as tf
 from keras.models import load_model
 
-import model_runner as mr
+import support as supp
 from model import keras_basic_unet
 import loss_functions as lf
 import performance_metrics as pm
@@ -28,9 +28,9 @@ session = tf.compat.v1.Session(config=config)
 # name for run
 name = "Test"
 # Data folder and identifiers
-folder = "..."
-mask_flag = "...y..."
-data_flag = "...x..."
+folder = "./demo_data/"
+mask_flag = "mask"
+data_flag = "data"
 ext = ".tif"
 # trainingsplit, % data to use for training (1-% is testing)
 train_size = 0.8
@@ -41,7 +41,7 @@ tilesize = 256
 # Define if uising grayscale images directly (=1) or stacking them to be rgb (=3)
 inputdepth = 1
 # training epochs for model
-epochs = ...
+epochs = 2
 # Number of batches to run
 batch_size = 16
 
@@ -59,7 +59,7 @@ clip_factor = 1e-2
 # Activation function
 activation = "sigmoid"
 # loss function
-loss_names = ["DSC", "DSC_BCE", "IoU", "Focal1", "Tversky57", "FocalTversky57", "Combo65", "BFCEG1", "BCE"] # Dont change
+loss_names = ["DSC", "DSC_BCE", "IoU", "Focal1", "Tversky57", "FocalTversky57", "Combo65", "BFCEG1", "BCE"]
 loss_index = -2
 
 ### Training callbacks and metrics
@@ -73,9 +73,9 @@ early_stopping_kwargs = dict(patience=10, restore_best_weights=True, verbose=1)
 
 
 # Get data
-x_paths, y_paths = mr.get_paths(folder, ext, data_flag, mask_flag)
+x_paths, y_paths = supp.get_paths(folder, ext, data_flag, mask_flag)
 
-y_train, x_train, y_test, x_test, tile_shape = mr.prep_input_data(x_paths, x_paths, train_size=train_size, clahe=False)
+y_train, x_train, y_test, x_test, tile_shape = supp.prep_input_data(x_paths, y_paths, train_size=train_size, clahe=False, seed=1)
 print("Tile shape: {}".format(tile_shape))
 print("Number of training/validation images: {}".format(x_train.shape[0]))
 print("Number of testing images: {}".format(x_test.shape[0]))
@@ -141,15 +141,6 @@ if TRAIN:
     tf.keras.backend.clear_session()
 
 # Test the model
-out = mr.test(model, y_test, x_test, tile_shape, model_name, batch_size, tilesize)
-recall, precision, f1, iou, theta = out
-print("Recall: {}".format(recall))
-print("Precision: {}".format(precision))
-print("F1: {}".format(f1))
-print("IoU: {}".format(iou))
-
-with open("./Results.txt", "a") as f:
-    line = f"{model_name} -Theta:{theta:.3f}- Recall:{recall:.4f} Precision:{precision:.4f} F1:{f1:.4f} IoU:{iou:.4f}\n"
-    f.write(line)
+supp.test(model, y_test, x_test, tile_shape, model_name, batch_size, tilesize)
 
 print("Complete, model and results saved.")
