@@ -9,113 +9,6 @@ from matplotlib.widgets import Slider, Button
 from matplotlib.ticker import MultipleLocator
 
 
-#### imaging
-def checkimg(imgnp, name="", show=True):
-    fig = plt.figure(figsize=(6,6))
-    ax1 = fig.add_subplot()
-    ax1.imshow(imgnp,cmap="Spectral")
-    ax1.set_title(name)
-    if show:
-        plt.show()
-
-def show_tiling(im_stack, grid_shape, name="", show=False, cmap='Greys'):
-    fig = plt.figure(np.random.randint(1, 100))
-    for i in range(len(im_stack)):
-        ax = fig.add_subplot(grid_shape[0], grid_shape[1], i+1)
-        ax.imshow(im_stack[i], cmap=cmap, vmin=im_stack.min(), vmax=im_stack.max())
-        ax.set_xticks([])
-        ax.set_yticks([])
-    plt.subplots_adjust(hspace=0.05, wspace=0.05, top=0.93, bottom=0.03, left=0.1, right=0.9)
-    plt.suptitle(f"Tiled {name} image")
-    if show:
-        plt.show()
-
-def compare_n_ims(im, titles=None, show=False, grid=None):
-    # Compare BSE, Alumina, Output
-    fig = plt.figure(4, figsize=(21,7))
-    axes = []
-    for i in range(len(im)):
-        ax = fig.add_subplot(1, len(im), i+1)
-        ax.imshow(im[i])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_title(titles[i])
-        if grid is not None:
-            ax.xaxis.set_major_locator(MultipleLocator(grid))
-            ax.yaxis.set_major_locator(MultipleLocator(grid))
-            ax.grid(which="major", axis="both", linestyle="-", color="#CCCCCC")
-        axes.append(ax)
-    plt.tight_layout()
-    if show:
-        plt.show()
-
-def checkimg(imgnp,name):
-    minmin = np.min(imgnp)
-    maxmax = np.max(imgnp)
-    fig = plt.figure(figsize=(6,6))
-    ax1 = fig.add_subplot()
-    ax1.imshow(imgnp,cmap="Spectral",vmin=minmin,vmax=maxmax)
-    ax1.set_title(name)
-
-def compsingletiles(name,*args):
-    imgnum = len(args)
-    for k in range(imgnum):
-        if args[k].ndim > 2:
-            if args[k].shape[2]>1:
-                args=list(args)
-                args[k] = np.expand_dims(args[k][:,:,0],axis=-1)
-    fig = plt.figure(figsize=(6*imgnum,6))
-    for k in range(imgnum):
-        ax = fig.add_subplot(1,imgnum,k+1)
-        ax.imshow(args[k],cmap="Spectral")
-        ax.set_xticks([])
-        ax.set_yticks([])
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=0.03, wspace=0.03, top=0.95, bottom=0.05, left=0.05, right=0.95)
-    plt.suptitle(name)
-
-######### FUNCS
-
-def z_score(volume):
-    volume = (volume - volume.mean(axis=(0,1,2), keepdims=True)) / volume.std(axis=(0,1,2), keepdims=True)
-    return volume
-
-
-def tileslice(imginput, tiles, offset=(0,0)):
-    """Function for tiling an image into 256x256 tiles.
-    Args:
-        imginput: np.array of shape (H,W)
-        tiles: np.array of length 2, containing x direction number of tiles and y dir number of tiles
-        offset: np.array of length 2, containing x and y offset of image from top left corner of image
-    Returns:
-        np.array of shape (tiles[0]*tiles[1],256,256)"""
-    img_stack = []
-    for i in range(tiles[0]):
-        for j in range(tiles[1]):
-            old = (slice(i*256 + offset[0], 256*(i+1) + offset[0]), slice(256*j + offset[1], 256*(j+1) + offset[1]))
-            img_stack.append(imginput[old])
-    return np.array(img_stack)
-
-def join_tiles(tiles,tilesize,sliceimgnp):
-    ##underway
-    ind = np.reshape(np.array(range(sliceimgnp.shape[0])),(tiles[0],tiles[1]))
-    img = np.zeros((tiles[0]*tilesize,tiles[1]*tilesize))
-    for i in range(tiles[0]):
-        for j in range(tiles[1]):
-            img[i*tilesize:(i+1)*tilesize,j*tilesize:(j+1)*tilesize] = np.squeeze(sliceimgnp[ind[i,j],:,:])
-    return img
-
-def loss_def(results):
-    plt.figure(figsize=(8, 8))
-    plt.title("Learning curve")
-    plt.plot(results.history["loss"], label="loss")
-    plt.plot(results.history["val_loss"], label="val_loss")
-    plt.plot(np.argmin(results.history["val_loss"]), np.min(results.history["val_loss"]), marker="x", color="r", label="best model")
-    plt.xlabel("Epochs")
-    plt.ylabel("log_loss")
-    plt.legend()
-
-
 def tile_and_augment(image, tile_size=256, num_translations=0, rotations=1, exposure_adjust=None, offset=[0, 0]):
     """Perform data augmentation, including translations, rotations, and exposure adjusmtents.
     Args:
@@ -141,6 +34,23 @@ def tile_and_augment(image, tile_size=256, num_translations=0, rotations=1, expo
         aug_stack =  augment_exposure(aug_stack, num_adjustments=2, adjustment_size=exposure_adjust)
     # print("   -> Created {} tiles that were augmented to produce {} tiles.".format(np.prod(num_tiles), aug_stack.shape[0]))
     return np.array(aug_stack)
+
+
+def tileslice(imginput, tiles, offset=(0,0)):
+    """Function for tiling an image into 256x256 tiles.
+    Args:
+        imginput: np.array of shape (H,W)
+        tiles: np.array of length 2, containing x direction number of tiles and y dir number of tiles
+        offset: np.array of length 2, containing x and y offset of image from top left corner of image
+    Returns:
+        np.array of shape (tiles[0]*tiles[1],256,256)"""
+    img_stack = []
+    for i in range(tiles[0]):
+        for j in range(tiles[1]):
+            old = (slice(i*256 + offset[0], 256*(i+1) + offset[0]), slice(256*j + offset[1], 256*(j+1) + offset[1]))
+            img_stack.append(imginput[old])
+    return np.array(img_stack)
+
 
 def augment_translation(image, tile_size=256, num_translations=3):
     """Function for translating the tiles around the image.
@@ -170,6 +80,7 @@ def augment_translation(image, tile_size=256, num_translations=3):
             count += output.shape[0]
     return augmented_images
 
+
 def augment_rot_mirror(images, rotations):
     """Data augmentation by rotating the provided images to create unique representations of the same image.
     Args:
@@ -190,6 +101,7 @@ def augment_rot_mirror(images, rotations):
     if rotations > 6: augmented_images[6::rotations] = np.flip(augmented_images[1::rotations], axis=1) # rotate +90 + flip up/down
     if rotations > 7: augmented_images[7::rotations] = np.flip(augmented_images[2::rotations], axis=1) # rotate -90 + flip up/down
     return augmented_images
+
 
 def augment_exposure(imgdata, num_adjustments=3, adjustment_size=0.1):
     """Vary the exposure of a image by adjusting the gamma value
@@ -215,53 +127,42 @@ def augment_exposure(imgdata, num_adjustments=3, adjustment_size=0.1):
                 count += 1
     return output
 
-def rgbstacks(bse_stack_256,al_stack_256):
-    bse_out = np.stack((bse_stack_256,bse_stack_256,bse_stack_256),axis=3)
-    al_out = np.expand_dims(al_stack_256,axis=-1)
-    return bse_out,al_out
 
-def grayscalestacks(bse_stack_256,al_stack_256):
-    bse_out = np.expand_dims(bse_stack_256,axis=-1)
-    al_out = np.expand_dims(al_stack_256,axis=-1)
-    return bse_out,al_out
 
-def interactive_view(image_stack, mask_stack):
-    """Create a matplotlib window that allows you to scroll through the image stack and toggle the mask on/off with a button press.
+
+
+def show_tiling(im_stack, grid_shape, name="", show=False, cmap='Greys'):
+    """Display a grid of images from a stack of images.
     Args:
-        image_stack: An array of images to view. shape (N,256,256)
-        mask_stack: An array of masks to view. shape (N,256,256)"""
-    # Create the figure
-    fig, ax = plt.subplots()
-    # Create the image object
-    im = ax.imshow(image_stack[0])
-    # Create the mask object
-    mask = ax.imshow(mask_stack[0], alpha=0.5, cmap='Reds', vmax=1, vmin=0)
-    # Create the button
-    axbutton = plt.axes([0.7, -0.2, 0.1, 0.075])
-    button = Button(axbutton, 'Toggle Mask')
-    # Create the slider
-    axslider = plt.axes([0.2, -0.05, 0.65, 0.03])
-    slider = Slider(axslider, 'Image', 0, image_stack.shape[0]-1, valinit=0, valstep=1)
-    # Define the update function
-    def update(val):
-        im.set_data(image_stack[int(slider.val)])
-        mask.set_data(mask_stack[int(slider.val)])
-        fig.canvas.draw_idle()
-    # Define the button function
-    def toggle_mask(event):
-        if mask.get_alpha() == 0.5:
-            mask.set_alpha(0)
-        else:
-            mask.set_alpha(0.5)
-        fig.canvas.draw_idle()
-    # Connect the functions to the objects
-    slider.on_changed(update)
-    button.on_clicked(toggle_mask)
-    # Show the figure
-    plt.show()
+        im_stack: The stack of images to display. shape (N,256,256)
+        grid_shape: The shape of the grid to display the images in. tuple of (rows, columns)
+        name: The name of the image to display. str
+        show: Whether to display the image. bool
+        cmap: The color map to use for the images. str
+    Returns:
+        None"""
+    fig = plt.figure(np.random.randint(1, 100))
+    for i in range(len(im_stack)):
+        ax = fig.add_subplot(grid_shape[0], grid_shape[1], i+1)
+        ax.imshow(im_stack[i], cmap=cmap, vmin=im_stack.min(), vmax=im_stack.max())
+        ax.set_xticks([])
+        ax.set_yticks([])
+    plt.subplots_adjust(hspace=0.05, wspace=0.05, top=0.93, bottom=0.03, left=0.1, right=0.9)
+    plt.suptitle(f"Tiled {name} image")
+    if show:
+        plt.show()
+
+
 
 def combine_tiles(stack, tiling_shape):
-    output = np.zeros((tiling_shape[0]*256, tiling_shape[1]*256), dtype=stack.dtype)
+    """Combine the tiles into a single image.
+    Args:
+        stack: The stack of images to combine. shape (N,H,W)
+        tiling_shape: The shape of the tiling. tuple of (rows, columns)
+    Returns:
+        output: The combined image. shape (H*rows, W*columns)"""
+    shape = (tiling_shape[0]*stack.shape[1], tiling_shape[1]*stack.shape[2])
+    output = np.zeros(shape, dtype=stack.dtype)
     count = 0
     for i in range(tiling_shape[0]):
         for j in range(tiling_shape[1]):
