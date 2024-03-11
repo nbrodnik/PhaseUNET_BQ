@@ -26,9 +26,9 @@ session = tf.compat.v1.Session(config=config)
 ########################
 ###### USER INPUT ######
 # name for run
-name = "Test"
+name = "Test_Combined_Conditions"
 # Data folder and identifiers
-folder = "./demo_data/"
+folder = "C:/Users/PollockGroup/Documents/Users/Carolina Frey/Combined Images/Test Train Images/"
 mask_flag = "mask"
 data_flag = "data"
 ext = ".tif"
@@ -41,13 +41,13 @@ tilesize = 256
 # Define if uising grayscale images directly (=1) or stacking them to be rgb (=3)
 inputdepth = 1
 # training epochs for model
-epochs = 2
+epochs = 5
 # Number of batches to run
 batch_size = 16
 
 # Define if we are training the model or reading in previously trained weights
-TRAIN = True
-load_from = None
+TRAIN = False
+load_from = "C:/Users/PollockGroup/Documents/coding/BasicUNET/Test_Combined_ConditionsBFCEG1.h5"
 
 ### More advanced inputs
 # Optimizer

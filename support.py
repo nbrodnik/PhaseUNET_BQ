@@ -80,6 +80,7 @@ def prep_input_data(x_paths, y_paths, train_size=0.8, seed=None, tilesize=256, c
         x = io.imread(x_paths[i])
         if clahe:
             x = exposure.equalize_adapthist(x, clip_limit=clahe_clip_limit)
+        x = (x - x.min()) / (x.max() - x.min())
         y = io.imread(y_paths[i]) > 0
         ##Setup model
         y_aug, _ = tile_and_augment(y, num_translations=2, rotations=8, exposure_adjust=0.15)

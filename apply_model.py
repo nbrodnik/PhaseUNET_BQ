@@ -7,12 +7,14 @@ import numpy as np
 from skimage import io, exposure
 from keras.models import load_model
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
-import support_functions as supp
+import support as supp
 import performance_metrics as pm
 from gradient_accumulator.GAModelWrapper import GAModelWrapper
+import loss_functions as lf
 
-# Configure GPU
+# Configure the GPU
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.9
 config.gpu_options.allow_growth = True
@@ -32,16 +34,25 @@ clahe = False
 # File extension
 ext = ".tif"
 # Save probabilities?
-save_probabilities = False
+save_probabilities = True
 # Theta threshld (should be pre-determined)
-theta = 0.5
+theta = 0.494
 # Path to model
-model_path = ".../model.h5"
+model_path = "C:/Users/PollockGroup/Documents/coding/BasicUNET/1200C 40h TestBFCEG1.h5"
 # Path to folder containing the images to run the model on
-images_folder = ".../"
+images_folder = "C:/Users/PollockGroup/Documents/Users/Carolina Frey/S GENP 160 1200C 40h/Remainder Images/"
 
 #####
-model = load_model(model_path, custom_objects={"IoU_Keras": pm.IoU_Keras, "GAModelWrapper": GAModelWrapper})
+model = load_model(model_path,
+                   custom_objects={"IoU_Keras": pm.IoU_Keras,
+                                "IoULoss": lf.IoULoss,
+                                "DiceLoss": lf.DiceLoss,
+                                "DiceBCELoss": lf.DiceBCELoss,
+                                "FocalLoss": lf.FocalLoss,
+                                "TverskyLoss": lf.TverskyLoss,
+                                "FocalTverskyLoss": lf.FocalTverskyLoss,
+                                "ComboLoss": lf.ComboLoss,
+                                "GAModelWrapper": GAModelWrapper})
 print("  -> Reading in BSE images")
 images = []
 masks = []
@@ -51,7 +62,7 @@ for p in os.listdir(images_folder):
     if p.endswith(ext):
         paths.append(p)
         bse = io.imread(images_folder + p)
-        bse = (bse - bse.min()) / (bse.max() - bse.min())
+        # bse = (bse - bse.min()) / (bse.max() - bse.min())
         images.append(bse)
 images = np.array(images)
 
@@ -63,18 +74,23 @@ for i in range(images.shape[0]):
         bse_image = images[i]
     tiles = np.array(bse_image.shape) // tilesize
     excess = np.array(bse_image.shape) % tilesize
-    bse_image_tiled = supp.tile_and_augment(bse_image, tilesize)
+    bse_image_tiled, _ = supp.tile_and_augment(bse_image, tilesize)
     bse_image_tiled = np.expand_dims(bse_image_tiled, axis=-1).astype(np.float32)
     output0 = model.predict(bse_image_tiled, verbose=0, batch_size=batch_size)
-    output0 = np.squeeze(supp.combine_tiles(output0, tiles))
-    if excess[0] == 0 and excess[1] == 0:
+    # fig, ax = plt.subplots(1, 2)
+    # ax[0].imshow(bse_image_tiled[0], cmap="gray")
+    # ax[1].imshow(output0[0, :, :, 0], cmap="gray")
+    # plt.show()
+    output0 = np.squeeze(supp.untile(output0, tiles))
+    if excess[0] == 0 or excess[1] == 0:
         output = output0
     else:
-        bse_image_tiled = supp.tile_and_augment(bse_image, tilesize, offset=excess)
+        bse_image_tiled, _ = supp.tile_and_augment(bse_image, tilesize, offset=excess)
         bse_image_tiled = np.expand_dims(bse_image_tiled, axis=-1).astype(np.float32)
         output1 = model.predict(bse_image_tiled, verbose=0, batch_size=batch_size)
-        output1 = np.squeeze(supp.combine_tiles(output1, tiles))
+        output1 = np.squeeze(supp.untile(output1, tiles))
         output = np.zeros((2,) + bse_image.shape, dtype=float)
+        print(excess[0], excess[1], output0.shape, output1.shape, output.shape)
         output[0, :-excess[0], :-excess[1]] = output0
         output[1, excess[0]:, excess[1]:] += output1
         if combining_function == "mean":
