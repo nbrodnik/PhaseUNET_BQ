@@ -34,13 +34,13 @@ clahe = False
 # File extension
 ext = ".tif"
 # Save probabilities?
-save_probabilities = True
+save_probabilities = False
 # Theta threshld (should be pre-determined)
 theta = 0.494
 # Path to model
-model_path = "C:/Users/PollockGroup/Documents/coding/BasicUNET/1200C 40h TestBFCEG1.h5"
+model_path = "/trained_model.h5"
 # Path to folder containing the images to run the model on
-images_folder = "C:/Users/PollockGroup/Documents/Users/Carolina Frey/S GENP 160 1200C 40h/Remainder Images/"
+images_folder = "/images/"
 
 #####
 model = load_model(model_path,
